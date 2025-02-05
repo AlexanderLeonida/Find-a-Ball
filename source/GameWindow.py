@@ -1,7 +1,7 @@
 # Cite: https://www.pygame.org/docs/
 import pygame
 
-def getBall():
+def get_ball():
     # pygame setup
     pygame.init()
     pygame.display.set_caption("Moving Ball")

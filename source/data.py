@@ -16,7 +16,7 @@ def create_table():
     try:
         with conn.cursor() as cursor:
             cursor.execute('''
-                CREATE TABLE IF NOT EXISTS BallData (
+                CREATE TABLE IF NOT EXISTS Ball_Data (
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     xpos INT NOT NULL,
                     ypos INT NOT NULL
@@ -30,7 +30,7 @@ def create_table():
 def delete_table():
     try:
         with conn.cursor() as cursor:
-            cursor.execute('DROP TABLE IF EXISTS Ball Data')
+            cursor.execute('DROP TABLE IF EXISTS Ball_Data')
             conn.commit()
         print("Table deleted")
     except Exception as e:

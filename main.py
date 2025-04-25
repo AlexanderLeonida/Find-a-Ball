@@ -6,9 +6,11 @@ import atexit
 import time
 import numpy as np
 import pandas as pd 
-from sklearn.linear_model import LinearRegression
 import seaborn as sns
 import matplotlib.pyplot as plt 
+from lstm_model import generate_multistep_data, train_lstm_model
+from linear_regression_models import train_position_model, train_velocity_model
+
 
 load_dotenv()
 db = pymysql.connect(host='localhost', user='root', password=os.getenv('pwrd'), database='HTMDNA')
@@ -70,6 +72,27 @@ def wait_for_start(screen):
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if button_rect.collidepoint(event.pos):
                     waiting = False
+
+def ask_model_choice(screen):
+    font = pygame.font.Font(None, 40)
+    screen.fill("black")
+
+    text1 = font.render("Press '0' for Linear Regression", True, (255, 255, 255))
+    text2 = font.render("Press '1' for LSTM Model", True, (255, 255, 255))
+    screen.blit(text1, (400, 300))
+    screen.blit(text2, (400, 350))
+    pygame.display.flip()
+
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_0:
+                    return "linear"
+                elif event.key == pygame.K_1:
+                    return "lstm"
 
 
 def init_pygame():
@@ -218,97 +241,84 @@ def AIOutputDrawing(ai_pos, screen, clock, output_time_limit, position_model, ve
         dt = clock.tick(60) / 1000 
         time_step += 1 
 
+def write_coordinates_to_file():
+    # Open (or create) a file in write mode ('w')
+    with open("./training_data/coordinates.txt", "w") as file:
+        # Read data from the database
+        df = pd.read_sql_query("SELECT * FROM Coordinates", db)
+        #print(df)
 
-def train_position_model(df):
-    if df.empty:
-        print("No data to train")
-        return None
-    
-    # time per change in coordinates
-    df["time_step"] = np.arange(len(df))
-    # change in x
-    # fill NA coordinates w/a 0
-    df["x_velocity"] = df["x_coordinate"].diff().fillna(0)
-    # change in y
-    df["y_velocity"] = df["y_coordinate"].diff().fillna(0)
- 
-    X = df[["x_coordinate", "y_coordinate", "time_step"]]
-    # predict new postiion
-    y = df[["x_coordinate", "y_coordinate"]]
- 
-    # https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LinearRegression.html
-    # entire method is pretty much this link
-    model = LinearRegression()
-    model.fit(X, y)
-    return model
+        # format each row as (x, y)
+        coordinates = [f"({x}, {y})" for x, y in zip(df['x_coordinate'], df['y_coordinate'])]
 
+        # add the delimeter for txt file parsing
+        formatted_coordinates = ":".join(coordinates)
 
-def train_velocity_model(df):
-    if df.empty:
-        print("No data to train")
-        return None
- 
-    # time per change in coordinates
-    df["time_step"] = np.arange(len(df))
-    # make sure there are no nulls in data, replace with 0s
-    df["x_velocity"] = df["x_coordinate"].diff().fillna(0)
-    df["y_velocity"] = df["y_coordinate"].diff().fillna(0)
- 
- 
-    X = df[["x_coordinate", "y_coordinate", "time_step"]]
-    y_x = df["x_velocity"]
-    y_y = df["y_velocity"]
- 
- 
-    # https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LinearRegression.html
-    # entire method is pretty much this link but doubled
-    velocity_x = LinearRegression()
-    velocity_y = LinearRegression()
-    velocity_x.fit(X, y_x)
-    velocity_y.fit(X, y_y)
- 
- 
-    return velocity_x, velocity_y
+        file.write(formatted_coordinates)
 
+        # return df to use afterwards in main
+        return df
 
 def main():
     atexit.register(on_exit)
     screen, clock = init_pygame()
     create_coordinates_table()
     
-    wait_for_start(screen)  # Show start button before tracking starts
-    # default postions set in center
+    wait_for_start(screen)
+    model_choice = ask_model_choice(screen)
+
     player_pos = pygame.Vector2(screen.get_width() / 2, screen.get_height() / 2)
     ai_pos = pygame.Vector2(screen.get_width() / 2, screen.get_height() / 2)
- 
-    # user draws on screen with ball
-    player_trajectory = userInputDrawing(player_pos=player_pos, screen=screen, clock=clock, user_input_time_limit=5)
-    print("User input done")
- 
-    # get user input from database, put into pandas df
-    df = pd.read_sql_query("SELECT * FROM Coordinates", db)
- 
-    # predict next position of AI
-    # update: not needed
-    position_model = train_position_model(df)
-    # predict new velocity of AI (velocity is a vector which includes direction)
-    velocity_model_x, velocity_model_y = train_velocity_model(df)
 
-    # we know there are no coordinates in the database, kill the program
-    if not position_model or not velocity_model_x:
-        return
- 
-    # draw AI 
-    # remember, we are only drawing based on velocity predictions, not new guessing predictions
-    AIOutputDrawing(ai_pos=ai_pos, screen=screen, clock=clock, output_time_limit=10, position_model=position_model, velocity_model_x=velocity_model_x, velocity_model_y=velocity_model_y, player_trajectory=player_trajectory)
- 
-    # graph of where the ball went over the course of the user's input
-    # it shold match what we saw the AI doing
+    player_trajectory = userInputDrawing(player_pos=player_pos, screen=screen, clock=clock, user_input_time_limit=15)
+    print("User input done")
+
+    df = write_coordinates_to_file()
+
+    if model_choice == "linear":
+        position_model = train_position_model(df)
+        velocity_model_x, velocity_model_y = train_velocity_model(df)
+
+        if not position_model or not velocity_model_x:
+            return
+
+        AIOutputDrawing(
+            ai_pos=ai_pos,
+            screen=screen,
+            clock=clock,
+            output_time_limit=50,
+            position_model=position_model,
+            velocity_model_x=velocity_model_x,
+            velocity_model_y=velocity_model_y,
+            player_trajectory=player_trajectory
+        )
+
+    elif model_choice == "lstm":
+
+        # build and train LSTM model
+        lstm_model = train_lstm_model("coordinates.txt")
+        print(lstm_model)
+        print("______________________________________________________")
+
+        predicted_trajectory = []
+        for _ in range(len(lstm_model[0])):
+            predicted_trajectory.append((int(lstm_model[0][_]), int(lstm_model[1][_]) - 1))
+
+        # animate the predicted path
+        print(predicted_trajectory)
+        for _ in predicted_trajectory:
+            ai_pos = pygame.Vector2(_[0], _[1])
+            computerDraw(screen, ai_pos)
+            pygame.display.flip()
+            # frames per second, increase to make go faster
+            clock.tick(20)
+
     sns.scatterplot(x='x_coordinate', y='y_coordinate', data=df)
-    plt.show(block=True)
- 
+    plt.gca().invert_yaxis()
+    plt.title('Ball Trajectory')
+    plt.show()
+
     print("Program finished.")
 
-
-if __name__ == "__main__":
+if __name__ == main():
     main()

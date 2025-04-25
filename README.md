@@ -7,5 +7,5 @@ The goal of this project is to be able to train my own LSTM neural net model in 
 
 On a larger scale, something like this could be used to predict any example of user input (Ex. movement of a character in a game). 
 
-
+Please check out [videos of this working!](./Video%20examples/Overview.md)
 

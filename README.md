@@ -1,4 +1,6 @@
 # Find-a-Ball
-OpenCV and Tensorflow / Scikit-learn with Python to find a ball!
+OpenCV and Pytorch / Scikit-learn in Python to predict a ball!
 
-add to documentation for end of project
+## The Objective 
+
+The goal of this project is to be able to train my own LSTM AI model for learning purposes! On a larger scale, something like this could be used to 

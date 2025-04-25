@@ -302,7 +302,7 @@ def main():
 
         predicted_trajectory = []
         for _ in range(len(lstm_model[0])):
-            predicted_trajectory.append((int(lstm_model[0][_]), int(lstm_model[1][_]) - 1))
+            predicted_trajectory.append((int(lstm_model[0][_]) - 1, int(lstm_model[1][_]) - 1))
 
         # animate the predicted path
         print(predicted_trajectory)
